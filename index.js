@@ -1,7 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
-import { MongoClient, ServerApiVersion } from "mongodb";
+import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 
 dotenv.config();
 
@@ -33,15 +33,19 @@ async function run() {
       res.send("Express & Native MongoDB Atlas Server is running! 🚀");
     });
 
-    // app.post('/users', async (req, res) => {
-    //   try {
-    //     const newUser = req.body;
-    //     const result = await userCollection.insertOne(newUser);
-    //     res.status(201).json({ success: true, insertedId: result.insertedId });
-    //   } catch (error) {
-    //     res.status(500).json({ success: false, error: error.message });
-    //   }
-    // });
+    app.post("/studios", async (req, res) => {
+      try {
+        const newStudio = req.body;
+        const result = await studioCollection.insertOne(newStudio);
+        res.status(201).json({
+          success: true,
+          message: "Studio added successfully!",
+          insertedId: result.insertedId,
+        });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
 
     app.get("/studios", async (req, res) => {
       const data = req.body;
@@ -50,6 +54,42 @@ async function run() {
         res.status(200).json({ success: true, data: studios });
       } catch (error) {
         res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // 3. GET Single Studio Details by ID
+    app.get("/studios/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        // MongoDB ObjectId validation
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid Studio ID format",
+          });
+        }
+
+        const query = { _id: new ObjectId(id) };
+        const studio = await studioCollection.findOne(query);
+
+        if (!studio) {
+          return res.status(404).json({
+            success: false,
+            message: "Studio not found",
+          });
+        }
+
+        res.status(200).json({
+          success: true,
+          data: studio,
+        });
+      } catch (error) {
+        console.error("Error fetching studio details:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
       }
     });
 
