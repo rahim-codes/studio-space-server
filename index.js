@@ -129,7 +129,6 @@ async function run() {
       try {
         const categoryName = req.params.categoryName;
 
-        // Category name diye query kora (case-insensitive ba exact match)
         const query = { category: categoryName };
         const studios = await studioCollection.find(query).toArray();
 
