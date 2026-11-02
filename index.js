@@ -93,6 +93,123 @@ async function run() {
       }
     });
 
+    // get data host email
+
+    app.get("/my-studios/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        if (!email) {
+          return res.status(400).json({
+            success: false,
+            message: "Host email parameter is required",
+          });
+        }
+
+        const query = { hostEmail: email };
+        const myStudios = await studioCollection.find(query).toArray();
+
+        res.status(200).json({
+          success: true,
+          data: myStudios,
+        });
+      } catch (error) {
+        console.error("Error fetching user studios:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+    });
+
+    // Delete studio
+
+    app.delete("/studios/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid Studio ID format",
+          });
+        }
+
+        const query = { _id: new ObjectId(id) };
+        const result = await studioCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Studio not found",
+          });
+        }
+
+        res.status(200).json({
+          success: true,
+          message: "Studio deleted successfully",
+        });
+      } catch (error) {
+        console.error("Error deleting studio:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+    });
+
+    // update data
+
+    app.put("/studios/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid Studio ID format",
+          });
+        }
+
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            title: updatedData.title,
+            category: updatedData.category,
+            price: Number(updatedData.price),
+            securityDeposit: Number(updatedData.securityDeposit),
+            maxCapacity: Number(updatedData.maxCapacity),
+            location: updatedData.location,
+            image: updatedData.image,
+            amenities: updatedData.amenities,
+            description: updatedData.description,
+          },
+        };
+
+        const result = await studioCollection.updateOne(filter, updateDoc);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Studio not found",
+          });
+        }
+
+        res.status(200).json({
+          success: true,
+          message: "Studio updated successfully!",
+          result,
+        });
+      } catch (error) {
+        console.error("Error updating studio:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+    });
+
     console.log("✅ Successfully connected to MongoDB Atlas!");
   } catch (error) {
     console.error("❌ MongoDB Connection Failed:", error);
