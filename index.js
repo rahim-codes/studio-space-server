@@ -28,6 +28,7 @@ async function run() {
 
     const database = client.db("studio-space");
     const studioCollection = database.collection("studio");
+    const bookingCollection = database.collection("bookings");
 
     app.get("/", (req, res) => {
       res.send("Express & Native MongoDB Atlas Server is running! 🚀");
@@ -122,6 +123,30 @@ async function run() {
       }
     });
 
+    // Category was data get
+
+    app.get("/studios/category/:categoryName", async (req, res) => {
+      try {
+        const categoryName = req.params.categoryName;
+
+        // Category name diye query kora (case-insensitive ba exact match)
+        const query = { category: categoryName };
+        const studios = await studioCollection.find(query).toArray();
+
+        res.status(200).json({
+          success: true,
+          count: studios.length,
+          data: studios,
+        });
+      } catch (error) {
+        console.error("Error fetching studios by category:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+    });
+
     // Delete studio
 
     app.delete("/studios/:id", async (req, res) => {
@@ -160,7 +185,7 @@ async function run() {
 
     // update data
 
-    app.put("/studios/:id", async (req, res) => {
+    app.patch("/studios/:id", async (req, res) => {
       try {
         const id = req.params.id;
         const updatedData = req.body;
@@ -207,6 +232,66 @@ async function run() {
           success: false,
           error: error.message,
         });
+      }
+    });
+
+    // Bookings data
+
+    app.post("/bookings", async (req, res) => {
+      try {
+        const bookingData = req.body;
+
+        const newBooking = {
+          ...bookingData,
+          createdAt: new Date(),
+          status: "pending",
+        };
+
+        const result = await bookingCollection.insertOne(newBooking);
+
+        res.status(201).json({
+          success: true,
+          message: "Workspace booked successfully!",
+          insertedId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error creating booking:", error);
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+    });
+
+    // get booking data
+    app.get("/bookings/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const query = { "userInfo.userEmail": email };
+        const result = await bookingCollection.find(query).toArray();
+        res.status(200).json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // update booking data
+
+    app.patch("/bookings/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { status } = req.body;
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = { $set: { status: status } };
+
+        const result = await bookingCollection.updateOne(filter, updateDoc);
+        res.status(200).json({
+          success: true,
+          message: "Booking updated successfully",
+          result,
+        });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
       }
     });
 
