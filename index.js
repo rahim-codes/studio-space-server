@@ -1,3 +1,4 @@
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
@@ -6,11 +7,49 @@ import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 dotenv.config();
 
 const app = express();
+// app.use(cors());
+app.use(cookieParser());
+app.use(express.json());
+
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  }),
+);
+
 const PORT = process.env.PORT || 8000;
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+
+// Middleware with jwt
+
+// const verifyAuth = async (req, res, next) => {
+//   try {
+//     const token = req.cookies["better-auth.session_token"];
+//     console.log("Extracted Token from Cookie:", token);
+
+//     if (!token) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized",
+//       });
+//     }
+
+//     const secret = new TextEncoder().encode(process.env.BETTER_AUTH_SECRET);
+//     const { payload } = await jwtVerify(token, secret);
+
+//     req.user = payload;
+
+//     next();
+//   } catch (error) {
+//     console.error("JWT Verification Error:", error.message);
+//     return res.status(403).json({
+//       success: false,
+//       message: "Forbidden: Invalid or expired token",
+//     });
+//   }
+// };
 
 const uri = process.env.MONGO_URI;
 
@@ -29,6 +68,54 @@ async function run() {
     const database = client.db("studio-space");
     const studioCollection = database.collection("studio");
     const bookingCollection = database.collection("bookings");
+    const userCollection = database.collection("user");
+    const sessionCollection = database.collection("session");
+
+    const verifyAuth = async (req, res, next) => {
+      try {
+        const token = req.cookies["better-auth.session_token"];
+
+        if (!token) {
+          return res.status(401).json({
+            success: false,
+            message: "Unauthorized: No token provided in cookies",
+          });
+        }
+
+        // ডাটাবেজ থেকে সেশন চেক করা
+        const session = await sessionCollection.findOne({ token: token });
+
+        if (!session || new Date(session.expiresAt) < new Date()) {
+          return res.status(403).json({
+            success: false,
+            message: "Forbidden: Invalid or expired session",
+          });
+        }
+
+        // সেশন থেকে ইউজার বের করা
+        const user = await userCollection.findOne({ _id: session.userId });
+
+        if (!user) {
+          return res
+            .status(404)
+            .json({ success: false, message: "User not found" });
+        }
+
+        req.user = {
+          id: user._id.toString(),
+          email: user.email,
+          name: user.name,
+        };
+
+        next();
+      } catch (error) {
+        console.error("Auth Middleware Error:", error.message);
+        return res.status(500).json({
+          success: false,
+          message: "Internal Server Error during authentication",
+        });
+      }
+    };
 
     app.get("/", (req, res) => {
       res.send("Express & Native MongoDB Atlas Server is running! 🚀");
