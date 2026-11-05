@@ -14,8 +14,11 @@ app.use(express.json());
 
 app.use(
   cors({
-    origin: `${process.env.CLIENT_URL}`,
-    credentials: true,
+    origin: [
+      "http://localhost:3000",
+      process.env.CLIENT_URL, // আপনার নেক্সট.জেএস-এর লাইভ ডোমেন লিংক
+    ].filter(Boolean),
+    credentials: true, // এটি অবশ্যই true থাকতে হবে, না হলে কুকি পাস হবে না!
   }),
 );
 
@@ -104,16 +107,22 @@ async function run() {
       }
     };
 
-    app.post("/studios", verifyAuth, createStudio);
-    app.post("/api/studios", verifyAuth, createStudio);
+    app.post("/studios", createStudio);
+    app.post("/api/studios", createStudio);
 
     app.get("/studios", async (req, res) => {
-      const data = req.body;
       try {
-        const studios = await studioCollection.find(data).toArray();
-        res.status(200).json({ success: true, data: studios });
+        const studios = await studioCollection.find({}).toArray();
+
+        res.status(200).json({
+          success: true,
+          data: studios,
+        });
       } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({
+          success: false,
+          error: error.message,
+        });
       }
     });
 
@@ -155,7 +164,7 @@ async function run() {
 
     // get data host email
 
-    app.get("/my-studios/:email", verifyAuth, async (req, res) => {
+    app.get("/my-studios/:email", async (req, res) => {
       try {
         const email = req.params.email;
 
@@ -241,8 +250,8 @@ async function run() {
       }
     };
 
-    app.delete("/studios/:id", verifyAuth, deleteStudio);
-    app.delete("/api/studios/:id", verifyAuth, deleteStudio);
+    app.delete("/studios/:id", deleteStudio);
+    app.delete("/api/studios/:id", deleteStudio);
 
     // update data
 
@@ -324,8 +333,8 @@ async function run() {
       }
     };
 
-    app.post("/bookings", verifyAuth, createBooking);
-    app.post("/api/bookings", verifyAuth, createBooking);
+    app.post("/bookings", createBooking);
+    app.post("/api/bookings", createBooking);
 
     // get booking data
     app.get("/bookings/:email", async (req, res) => {
@@ -362,11 +371,10 @@ async function run() {
     console.log("✅ Successfully connected to MongoDB Atlas!");
   } catch (error) {
     console.error("❌ MongoDB Connection Failed:", error);
+    throw error;
   }
 }
 
-run().catch(console.dir);
+await run();
 
-app.listen(PORT, () => {
-  console.log(`🌍 Server is running on port ${PORT}`);
-});
+export default app;
