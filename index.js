@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { jwtVerify } from "jose";
 import { MongoClient, ObjectId, ServerApiVersion } from "mongodb";
 
 dotenv.config();
@@ -22,35 +23,6 @@ const PORT = process.env.PORT || 8000;
 
 // Middleware
 
-// Middleware with jwt
-
-// const verifyAuth = async (req, res, next) => {
-//   try {
-//     const token = req.cookies["better-auth.session_token"];
-//     console.log("Extracted Token from Cookie:", token);
-
-//     if (!token) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized",
-//       });
-//     }
-
-//     const secret = new TextEncoder().encode(process.env.BETTER_AUTH_SECRET);
-//     const { payload } = await jwtVerify(token, secret);
-
-//     req.user = payload;
-
-//     next();
-//   } catch (error) {
-//     console.error("JWT Verification Error:", error.message);
-//     return res.status(403).json({
-//       success: false,
-//       message: "Forbidden: Invalid or expired token",
-//     });
-//   }
-// };
-
 const uri = process.env.MONGO_URI;
 
 const client = new MongoClient(uri, {
@@ -68,52 +40,49 @@ async function run() {
     const database = client.db("studio-space");
     const studioCollection = database.collection("studio");
     const bookingCollection = database.collection("bookings");
-    const userCollection = database.collection("user");
-    const sessionCollection = database.collection("session");
+
+    const SESSION_JWT_COOKIE = "better-auth.session_data";
+
+    const getSessionJwt = (cookies) => {
+      const direct =
+        cookies[SESSION_JWT_COOKIE] ||
+        cookies[`__Secure-${SESSION_JWT_COOKIE}`];
+      if (direct) return direct;
+
+      // Cookie cache may be split into chunks: name.0, name.1, ...
+      const chunkNames = Object.keys(cookies)
+        .filter((name) => name.startsWith(`${SESSION_JWT_COOKIE}.`))
+        .sort(
+          (a, b) =>
+            Number(a.slice(SESSION_JWT_COOKIE.length + 1)) -
+            Number(b.slice(SESSION_JWT_COOKIE.length + 1)),
+        );
+      if (chunkNames.length === 0) return null;
+      return chunkNames.map((name) => cookies[name]).join("");
+    };
 
     const verifyAuth = async (req, res, next) => {
       try {
-        const token = req.cookies["better-auth.session_token"];
+        const token = getSessionJwt(req.cookies || {});
 
         if (!token) {
-          return res.status(401).json({
-            success: false,
-            message: "Unauthorized: No token provided in cookies",
-          });
-        }
-
-        // ডাটাবেজ থেকে সেশন চেক করা
-        const session = await sessionCollection.findOne({ token: token });
-
-        if (!session || new Date(session.expiresAt) < new Date()) {
-          return res.status(403).json({
-            success: false,
-            message: "Forbidden: Invalid or expired session",
-          });
-        }
-
-        // সেশন থেকে ইউজার বের করা
-        const user = await userCollection.findOne({ _id: session.userId });
-
-        if (!user) {
           return res
-            .status(404)
-            .json({ success: false, message: "User not found" });
+            .status(401)
+            .json({ success: false, message: "Unauthorized" });
         }
 
-        req.user = {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
-        };
+        const secret = new TextEncoder().encode(process.env.BETTER_AUTH_SECRET);
+        const { payload } = await jwtVerify(token, secret, {
+          algorithms: ["HS256"],
+        });
 
+        req.user = payload;
         next();
       } catch (error) {
-        console.error("Auth Middleware Error:", error.message);
-        return res.status(500).json({
-          success: false,
-          message: "Internal Server Error during authentication",
-        });
+        console.error("JWT verification failed:", error.message);
+        return res
+          .status(401)
+          .json({ success: false, message: "Unauthorized" });
       }
     };
 
@@ -121,7 +90,7 @@ async function run() {
       res.send("Express & Native MongoDB Atlas Server is running! 🚀");
     });
 
-    app.post("/studios", async (req, res) => {
+    const createStudio = async (req, res) => {
       try {
         const newStudio = req.body;
         const result = await studioCollection.insertOne(newStudio);
@@ -133,7 +102,10 @@ async function run() {
       } catch (error) {
         res.status(500).json({ success: false, error: error.message });
       }
-    });
+    };
+
+    app.post("/studios", verifyAuth, createStudio);
+    app.post("/api/studios", verifyAuth, createStudio);
 
     app.get("/studios", async (req, res) => {
       const data = req.body;
@@ -183,7 +155,7 @@ async function run() {
 
     // get data host email
 
-    app.get("/my-studios/:email", async (req, res) => {
+    app.get("/my-studios/:email", verifyAuth, async (req, res) => {
       try {
         const email = req.params.email;
 
@@ -235,7 +207,7 @@ async function run() {
 
     // Delete studio
 
-    app.delete("/studios/:id", async (req, res) => {
+    const deleteStudio = async (req, res) => {
       try {
         const id = req.params.id;
 
@@ -267,7 +239,10 @@ async function run() {
           error: error.message,
         });
       }
-    });
+    };
+
+    app.delete("/studios/:id", verifyAuth, deleteStudio);
+    app.delete("/api/studios/:id", verifyAuth, deleteStudio);
 
     // update data
 
@@ -323,7 +298,7 @@ async function run() {
 
     // Bookings data
 
-    app.post("/bookings", async (req, res) => {
+    const createBooking = async (req, res) => {
       try {
         const bookingData = req.body;
 
@@ -347,7 +322,10 @@ async function run() {
           error: error.message,
         });
       }
-    });
+    };
+
+    app.post("/bookings", verifyAuth, createBooking);
+    app.post("/api/bookings", verifyAuth, createBooking);
 
     // get booking data
     app.get("/bookings/:email", async (req, res) => {
